@@ -1,3 +1,6 @@
+mod steamuser;
+mod interface;
+
 #[allow(dead_code, unused)]
 mod dl;
 
@@ -67,4 +70,21 @@ pub fn init(path: std::path::PathBuf) -> Result<Context, InitError> {
 		library: module,
 		c_fn_shutdown: unsafe { std::mem::transmute(shutdown) }
 	})
+}
+
+pub struct HAuthTicket {
+	
+}
+
+pub struct SteamNetworkingIdentity {
+
+}
+
+pub enum EBeginAuthSessionResult {
+	OK,						// Ticket is valid for this game and this steamID.
+	InvalidTicket,			// Ticket is not valid.
+	DuplicateRequest,		// A ticket has already been submitted for this steamID
+	InvalidVersion,			// Ticket is from an incompatible interface version
+	GameMismatch,			// Ticket is not for this game
+	ExpiredTicket
 }
