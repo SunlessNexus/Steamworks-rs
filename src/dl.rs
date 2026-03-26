@@ -6,6 +6,7 @@ const RTLD_NOW: i32 = 2;
 #[link(name = "dl")]
 unsafe extern "C" {
     fn dlopen(filename: *const i8, flags: i32) -> *mut std::ffi::c_void;
+    fn dlclose(handle: *mut std::ffi::c_void) -> *const i32;
     fn dlsym(handle: *mut std::ffi::c_void, symbol: *const u8) -> *mut std::ffi::c_void;
     fn dlerror() -> *const i8;
 }
@@ -48,7 +49,7 @@ pub fn open(path: String) -> Option<Handle> {
 
     #[cfg(unix)]
     let module = unsafe {
-        dlopen(path.as_ptr())
+        dlopen(path.as_ptr(), RTLD_NOW)
     };
 
     if module as usize == 0x0 {
