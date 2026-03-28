@@ -1,6 +1,6 @@
 #[allow(unused)]
-mod steamuser;
-mod interface;
+pub mod steamuser;
+pub mod interface;
 
 #[allow(dead_code, unused)]
 mod dl;
@@ -28,7 +28,7 @@ impl Drop for Context {
 	}
 }
 
-pub fn init(path: std::path::PathBuf) -> Result<Context, InitError> {
+pub fn init(path: std::path::PathBuf, interfaces: Vec<&'static str>) -> Result<Context, InitError> {
 	if !path.is_file() {
 		return Err(InitError::NotAFile);
 	}
@@ -63,11 +63,16 @@ pub fn init(path: std::path::PathBuf) -> Result<Context, InitError> {
 
 	let init: unsafe extern "C" fn(*const u8, *mut u8) -> u8 = unsafe { std::mem::transmute(init) };
 	unsafe {
-		let version = b"\0\0";
+		let mut version: Vec<u8> = Vec::with_capacity(1024);
+		for interface in interfaces {
+			version.extend_from_slice(interface.as_bytes());
+			version.push(b'\0');
+		}
+		version.push(b'\0');
 
 		let mut message: [u8; 1024] = [0; 1024];
 		if init(version.as_ptr(), message.as_mut_ptr()) != 0x0 {
-			message[0] = b'\0';
+			message[1023] = b'\0';
 			println!("[Steamworks-rs] Failed to init SteamAPI: {}", String::from_utf8_lossy(&message));
 			return Err(InitError::FailedInit)
 		}

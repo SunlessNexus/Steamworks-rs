@@ -1,6 +1,6 @@
 use crate::{CSteamID, EBeginAuthSessionResult, HAuthTicket, SteamNetworkingIdentity, interface::{Interface, ifunc}};
 
-struct ISteamUser {
+pub struct ISteamUser {
 	object: *mut std::ffi::c_void
 }
 
