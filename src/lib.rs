@@ -1,3 +1,4 @@
+#[allow(unused)]
 mod steamuser;
 mod interface;
 
@@ -14,6 +15,7 @@ pub enum InitError {
 }
 
 pub struct Context {
+	#[allow(unused)]
 	library: dl::Handle,
 	c_fn_shutdown: unsafe extern "C" fn() -> std::ffi::c_void
 }
@@ -49,7 +51,7 @@ pub fn init(path: std::path::PathBuf) -> Result<Context, InitError> {
 		None => return Err(InitError::FailedLoading)
 	};
 
-	let init = module.find(b"SteamAPI_InitFlat\0");
+	let init = module.find(b"SteamInternal_SteamAPI_Init\0");
 	if init.is_null() {
 		return Err(InitError::FailedInit)
 	}
@@ -59,9 +61,14 @@ pub fn init(path: std::path::PathBuf) -> Result<Context, InitError> {
 		return Err(InitError::FailedInit)
 	}
 
-	let init: unsafe extern "C" fn(*const ()) -> u8 = unsafe { std::mem::transmute(init) };
+	let init: unsafe extern "C" fn(*const u8, *mut u8) -> u8 = unsafe { std::mem::transmute(init) };
 	unsafe {
-		if init(std::ptr::null()) != 0x0 {
+		let version = b"\0\0";
+
+		let mut message: [u8; 1024] = [0; 1024];
+		if init(version.as_ptr(), message.as_mut_ptr()) != 0x0 {
+			message[0] = b'\0';
+			println!("[Steamworks-rs] Failed to init SteamAPI: {}", String::from_utf8_lossy(&message));
 			return Err(InitError::FailedInit)
 		}
 	}
@@ -72,8 +79,16 @@ pub fn init(path: std::path::PathBuf) -> Result<Context, InitError> {
 	})
 }
 
+pub struct CSteamID(u64);
+
+// Opaque object representing an authticket
 pub struct HAuthTicket {
-	
+	pub(crate) version: u32,
+	// Version 1
+	pub(crate) v1_handle: Option<u32>,
+	pub(crate) v1_associated_id: Option<CSteamID>,
+	pub(crate) v1_buffer: Option<[u8; 1024]>,
+	pub(crate) v1_length: Option<usize>
 }
 
 pub struct SteamNetworkingIdentity {
@@ -87,4 +102,140 @@ pub enum EBeginAuthSessionResult {
 	InvalidVersion,			// Ticket is from an incompatible interface version
 	GameMismatch,			// Ticket is not for this game
 	ExpiredTicket
+}
+
+pub enum Universe {
+	Individual,
+	Public,
+	Beta,
+	Internal,
+	Dev,
+	RC
+}
+
+pub enum AccountType {
+	Invalid,
+	Individual,
+	Multiseat,
+	GameServer,
+	AnonGameServer,
+	Pending,
+	ContentServer,
+	Clan,
+	Chat,
+	P2P,
+	AnonUser
+}
+
+impl From<u64> for CSteamID {
+	fn from(id: u64) -> Self {
+		Self(id)
+	}
+}
+
+impl Into<u64> for CSteamID {
+	fn into(self) -> u64 {
+		self.0
+	}
+}
+
+impl Into<u64> for &CSteamID {
+	fn into(self) -> u64 {
+		self.0
+	}
+}
+
+impl CSteamID {
+	pub fn new(universe: Universe, account_type: AccountType, instance: u32, account_id: u32) -> Self {
+		let universe: u8 = match universe {
+			Universe::Individual => 0,
+			Universe::Public => 1,
+			Universe::Beta => 2,
+			Universe::Internal => 3,
+			Universe::Dev => 4,
+			Universe::RC => 5
+		};
+
+		let account_type: u8 = match account_type {
+			AccountType::Invalid => 0,
+			AccountType::Individual => 1,
+			AccountType::Multiseat => 2,
+			AccountType::GameServer => 3,
+			AccountType::AnonGameServer => 4,
+			AccountType::Pending => 5,
+			AccountType::ContentServer => 6,
+			AccountType::Clan => 7,
+			AccountType::Chat => 8,
+			AccountType::P2P => 9,
+			AccountType::AnonUser => 10
+		};
+
+		let instance = instance & 0xFFFFF;
+
+		// Shift every bits in their respective place
+		Self( ((universe as u64) << 56) | ((account_type as u64) << 52) | ((instance as u64) << 32) | (account_id as u64) )
+	}
+
+	pub fn universe(&self) -> Option<Universe> {
+		match ((self.0 >> 56) & 0xFF) as u8 {
+			0 => Some(Universe::Individual),
+			1 => Some(Universe::Public),
+			2 => Some(Universe::Beta),
+			3 => Some(Universe::Internal),
+			4 => Some(Universe::Dev),
+			5 => Some(Universe::RC),
+			_ => None
+		}
+	}
+
+	pub fn account_type(&self) -> Option<AccountType> {
+		match ((self.0 >> 52) & 0xF) as u8 {
+			0 => Some(AccountType::Invalid),
+			1 => Some(AccountType::Individual),
+			2 => Some(AccountType::Multiseat),
+			3 => Some(AccountType::GameServer),
+			4 => Some(AccountType::AnonGameServer),
+			5 => Some(AccountType::Pending),
+			6 => Some(AccountType::ContentServer),
+			7 => Some(AccountType::Clan),
+			8 => Some(AccountType::Chat),
+			9 => Some(AccountType::P2P),
+			10 => Some(AccountType::AnonUser),
+			_ => None
+		}
+	}
+
+	pub fn instance(&self) -> u32 {
+		((self.0 >> 32) & 0xFFFFF) as u32
+	}
+
+	pub fn account_id(&self) -> u32 {
+		(self.0 & 0xFFFFFFFF) as u32
+	}
+}
+
+impl HAuthTicket {
+	pub(crate) fn new_version1(handle: u32, steam_id: CSteamID, buffer: [u8; 1024], length: usize) -> Self {
+		Self {
+			version: 1,
+			v1_handle: Some(handle),
+			v1_associated_id: Some(steam_id),
+			v1_buffer: Some(buffer),
+			v1_length: Some(length)
+		}
+	}
+}
+
+impl EBeginAuthSessionResult {
+	pub(crate) fn v1_from(value: u32) -> Option<Self> {
+		match value {
+			0 => Some(EBeginAuthSessionResult::OK),
+			1 => Some(EBeginAuthSessionResult::InvalidTicket),
+			2 => Some(EBeginAuthSessionResult::DuplicateRequest),
+			3 => Some(EBeginAuthSessionResult::InvalidVersion),
+			4 => Some(EBeginAuthSessionResult::GameMismatch),
+			5 => Some(EBeginAuthSessionResult::ExpiredTicket),
+			_ => None
+		}
+	}
 }
