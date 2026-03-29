@@ -1,8 +1,6 @@
 use crate::{CSteamID, EBeginAuthSessionResult, HAuthTicket, SteamNetworkingIdentity, interface::{Interface, ifunc}};
 
-pub struct ISteamUser {
-	object: *mut std::ffi::c_void
-}
+pub struct ISteamUser(*mut std::ffi::c_void);
 
 /*
 CSteamID GetSteamID()
@@ -48,10 +46,14 @@ ifunc!(ISteamUser__CancelAuthTicket, 17, 17, std::ffi::c_void, (
 ));
 
 impl Interface for ISteamUser {
-	const VERSION: &'static str =  "SteamUser023";
+	const VERSION: &'static str = "SteamUser023\0";
 
 	fn object_ptr(&self) -> *mut std::ffi::c_void {
-		self.object
+		self.0
+	}
+
+	fn create(object_ptr: *mut std::ffi::c_void) -> Self {
+		ISteamUser(object_ptr)
 	}
 }
 

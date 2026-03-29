@@ -1,6 +1,7 @@
 pub trait Interface {
 	const VERSION: &'static str;
 	fn object_ptr(&self) -> *mut std::ffi::c_void;
+	fn create(object_ptr: *mut std::ffi::c_void) -> Self;
 }
 
 macro_rules! ifunc {
@@ -35,3 +36,35 @@ macro_rules! ifunc {
 }}
 
 pub(crate) use ifunc;
+
+macro_rules! impl_steam_iface {
+    ($($variant:ident($data:ty)),*) => {
+        pub(crate) trait InterfaceUnwrap<T>
+		where
+			T: Interface
+		{
+            fn unwrap(self) -> T;
+        }
+
+        enum EInterface {
+            $(
+                $variant($data),
+            )*
+        }
+
+        $(
+            impl InterfaceUnwrap<$data> for EInterface {
+                fn unwrap(self) -> $data {
+                    match self {
+                        EInterface::$variant(iface) => iface,
+                        _ => panic!("Wrong Interface type!")
+                    }
+                }
+            }
+        )*
+    }
+}
+
+impl_steam_iface!(
+    ISteamUserV23(crate::steamuser::v23::ISteamUser)
+);
