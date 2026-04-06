@@ -2,7 +2,10 @@
 pub mod steamuser;
 #[allow(unused)]
 pub mod steamgameserver;
+#[allow(unused)]
+pub mod steamencryptedappticket;
 pub mod interface;
+pub mod callback;
 
 #[allow(dead_code, unused)]
 mod dl;
