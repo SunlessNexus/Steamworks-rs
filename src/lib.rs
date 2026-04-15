@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 #[allow(unused)]
 pub mod steamuser;
 #[allow(unused)]
@@ -19,12 +21,15 @@ pub enum InitError {
 	Internal
 }
 
+#[derive(Clone)]
 pub(crate) struct HSteamPipe(i32);
+#[derive(Clone)]
 pub(crate) struct HSteamUser(i32);
 
+#[derive(Clone)]
 pub struct Context {
 	#[allow(unused)]
-	library: dl::Handle,
+	library: Arc<dl::Handle>,
 	c_fn_shutdown: unsafe extern "C" fn() -> std::ffi::c_void,
 	c_fn_create_interface: unsafe extern "C" fn(std::ffi::c_int, *const u8) -> *mut std::ffi::c_void,
 	user: HSteamUser,
@@ -137,7 +142,7 @@ pub fn init_gameserver(
 	println!("c_fn_create_interface: {:#x}", create_interface.addr());
 
 	Ok(Context {
-		library: module,
+		library: module.into(),
 		c_fn_shutdown: unsafe {
 			std::mem::transmute(shutdown)
 		},
@@ -214,7 +219,7 @@ pub fn init(
 	}
 
 	Ok(Context {
-		library: module,
+		library: module.into(),
 		c_fn_shutdown: unsafe {
 			std::mem::transmute(shutdown)
 		},
@@ -246,8 +251,142 @@ pub struct SteamNetworkingIdentity {
 
 }
 
+pub enum EResult {
+	None,                                       // no result
+	Ok,                                         // success
+	Fail,                                       // generic failure 
+	NoConnection,                               // no/failed network connection
+	NoConnectionRetry,                          // OBSOLETE - removed
+	InvalidPassword,                            // password/ticket is invalid
+	LoggedInElsewhere,                          // same user logged in elsewhere
+	InvalidProtocolVer,                         // protocol version is incorrect
+	InvalidParam,                               // a parameter is incorrect
+	FileNotFound,                               // file was not found
+	Busy,                                       // called method busy - action not taken
+	InvalidState,                               // called object was in an invalid state
+	InvalidName,                                // name is invalid
+	InvalidEmail,                               // email is invalid
+	DuplicateName,                              // name is not unique
+	AccessDenied,                               // access is denied
+	Timeout,                                    // operation timed out
+	Banned,                                     // VAC2 banned
+	AccountNotFound,                            // account not found
+	InvalidSteamID,                             // steamID is invalid
+	ServiceUnavailable,                         // The requested service is currently unavailable
+	NotLoggedOn,                                // The user is not logged on
+	Pending,                                    // Request is pending (may be in process, or waiting on third party)
+	EncryptionFailure,                          // Encryption or Decryption failed
+	InsufficientPrivilege,                      // Insufficient privilege
+	LimitExceeded,                              // Too much of a good thing
+	Revoked,                                    // Access has been revoked (used for revoked guest passes)
+	Expired,                                    // License/Guest pass the user is trying to access is expired
+	AlreadyRedeemed,                            // Guest pass has already been redeemed by account, cannot be acked again
+	DuplicateRequest,                           // The request is a duplicate and the action has already occurred in the past, ignored this time
+	AlreadyOwned,                               // All the games in this guest pass redemption request are already owned by the user
+	IPNotFound,                                 // IP address not found
+	PersistFailed,                              // failed to write change to the data store
+	LockingFailed,                              // failed to acquire access lock for this operation
+	LogonSessionReplaced,                       //
+	ConnectFailed,                              //
+	HandshakeFailed,                            //
+	IOFailure,                                  //
+	RemoteDisconnect,                           //
+	ShoppingCartNotFound,                       // failed to find the shopping cart requested
+	Blocked,                                    // a user didn't allow it
+	Ignored,                                    // target is ignoring sender
+	NoMatch,                                    // nothing matching the request found
+	AccountDisabled,                            //
+	ServiceReadOnly,                            // this service is not accepting content changes right now
+	AccountNotFeatured,                         // account doesn't have value, so this feature isn't available
+	AdministratorOK,                            // allowed to take this action, but only because requester is admin
+	ContentVersion,                             // A Version mismatch in content transmitted within the Steam protocol.
+	TryAnotherCM,                               // The current CM can't service the user making a request, user should try another.
+	PasswordRequiredToKickSession,              // You are already logged in elsewhere, this cached credential login has failed.
+	AlreadyLoggedInElsewhere,                   // You are already logged in elsewhere, you must wait
+	Suspended,                                  // Long running operation (content download) suspended/paused
+	Cancelled,                                  // Operation canceled (typically by user: content download)
+	DataCorruption,                             // Operation canceled because data is ill formed or unrecoverable
+	DiskFull,                                   // Operation canceled - not enough disk space.
+	RemoteCallFailed,                           // an remote call or IPC call failed
+	PasswordUnset,                              // Password could not be verified as it's unset server side
+	ExternalAccountUnlinked,                    // External account (PSN, Facebook...) is not linked to a Steam account
+	PSNTicketInvalid,                           // PSN ticket was invalid
+	ExternalAccountAlreadyLinked,               // External account (PSN, Facebook...) is already linked to some other account, must explicitly request to replace/delete the link first
+	RemoteFileConflict,                         // The sync cannot resume due to a conflict between the local and remote files
+	IllegalPassword,                            // The requested new password is not legal
+	SameAsPreviousValue,                        // new value is the same as the old one ( secret question and answer )
+	AccountLogonDenied,                         // account login denied due to 2nd factor authentication failure
+	CannotUseOldPassword,                       // The requested new password is not legal
+	InvalidLoginAuthCode,                       // account login denied due to auth code invalid
+	AccountLogonDeniedNoMail,                   // account login denied due to 2nd factor auth failure - and no mail has been sent - partner site specific
+	HardwareNotCapableOfIPT,                    // 
+	IPTInitError,                               // 
+	ParentalControlRestricted,                  // operation failed due to parental control restrictions for current user
+	FacebookQueryError,                         // Facebook query returned an error
+	ExpiredLoginAuthCode,                       // account login denied due to auth code expired
+	IPLoginRestrictionFailed,                   //
+	AccountLockedDown,                          //
+	AccountLogonDeniedVerifiedEmailRequired,    //
+	NoMatchingURL,                              //
+	BadResponse,                                // parse failure, missing field, etc.
+	RequirePasswordReEntry,                     // The user cannot complete the action until they re-enter their password
+	ValueOutOfRange,                            // the value entered is outside the acceptable range
+	UnexpectedError,                            // something happened that we didn't expect to ever happen
+	Disabled,                                   // The requested service has been configured to be unavailable
+	InvalidCEGSubmission,                       // The set of files submitted to the CEG server are not valid !
+	RestrictedDevice,                           // The device being used is not allowed to perform this action
+	RegionLocked,                               // The action could not be complete because it is region restricted
+	RateLimitExceeded,                          // Temporary rate limit exceeded, try again later, different from k_EResultLimitExceeded which may be permanent
+	AccountLoginDeniedNeedTwoFactor,            // Need two-factor code to login
+	ItemDeleted,                                // The thing we're trying to access has been deleted
+	AccountLoginDeniedThrottle,                 // login attempt failed, try to throttle response to possible attacker
+	TwoFactorCodeMismatch,                      // two factor code mismatch
+	TwoFactorActivationCodeMismatch,            // activation code for two-factor didn't match
+	AccountAssociatedToMultiplePartners,        // account has been associated with multiple partners
+	NotModified,                                // data not modified
+	NoMobileDevice,                             // the account does not have a mobile device associated with it
+	TimeNotSynced,                              // the time presented is out of range or tolerance
+	SmsCodeFailed,                              // SMS code failure (no match, none pending, etc.)
+	AccountLimitExceeded,                       // Too many accounts access this resource
+	AccountActivityLimitExceeded,               // Too many changes to this account
+	PhoneActivityLimitExceeded,                 // Too many changes to this phone
+	RefundToWallet,                             // Cannot refund to payment method, must use wallet
+	EmailSendFailure,                           // Cannot send an email
+	NotSettled,                                 // Can't perform operation till payment has settled
+	NeedCaptcha,                                // Needs to provide a valid captcha
+	GSLTDenied,                                 // a game server login token owned by this token's owner has been banned
+	GSOwnerDenied,                              // game server owner is denied for other reason (account lock, community ban, vac ban, missing phone)
+	InvalidItemType,                            // the type of thing we were requested to act on is invalid
+	IPBanned,                                   // the ip address has been banned from taking this action
+	GSLTExpired,                                // this token has expired from disuse; can be reset for use
+	InsufficientFunds,                          // user doesn't have enough wallet funds to complete the action
+	TooManyPending,                             // There are too many of this thing pending already
+	NoSiteLicensesFound,                        // No site licenses found
+	WGNetworkSendExceeded,                      // the WG couldn't send a response because we exceeded max network send size
+	AccountNotFriends,                          // the user is not mutually friends
+	LimitedUserAccount,                         // the user is limited
+	CantRemoveItem,                             // item can't be removed
+	AccountDeleted,                             // account has been deleted
+	ExistingUserCancelledLicense,               // A license for this already exists, but cancelled
+	CommunityCooldown,                          // access is denied because of a community cooldown (probably from support profile data resets)
+	NoLauncherSpecified,                        // No launcher was specified, but a launcher was needed to choose correct realm for operation.
+	MustAgreeToSSA,                             // User must agree to china SSA or global SSA before login
+	LauncherMigrated,                           // The specified launcher type is no longer supported; the user should be directed elsewhere
+	SteamRealmMismatch,                         // The user's realm does not match the realm of the requested resource
+	InvalidSignature,                           // signature check did not match
+	ParseFailure,                               // Failed to parse input
+	NoVerifiedPhone,                            // account does not have a verified phone number
+	InsufficientBattery,                        // user device doesn't have enough battery charge currently to complete the action
+	ChargerRequired,                            // The operation requires a charger to be plugged in, which wasn't present
+	CachedCredentialInvalid,                    // Cached credential was invalid - user must reauthenticate
+	PhoneNumberIsVOIP,                          // The phone number provided is a Voice Over IP number
+	NotSupported,                               // The data being accessed is not supported by this API
+	FamilySizeLimitExceeded,                    // Reached the maximum size of the family
+	OfflineAppCacheInvalid                      //
+}
+
 pub enum EBeginAuthSessionResult {
-	OK,						// Ticket is valid for this game and this steamID.
+	Ok,						// Ticket is valid for this game and this steamID.
 	InvalidTicket,			// Ticket is not valid.
 	DuplicateRequest,		// A ticket has already been submitted for this steamID
 	InvalidVersion,			// Ticket is from an incompatible interface version
@@ -297,7 +436,7 @@ impl Context {
 		if obj.is_null() || obj.addr() <= 0x10000 {
 			None
 		} else {
-			Some(T::create(obj))
+			Some(T::create(obj, self.clone()))
 		}
 	}
 }

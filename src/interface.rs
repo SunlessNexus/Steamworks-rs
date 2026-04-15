@@ -1,7 +1,8 @@
 pub trait Interface {
 	const VERSION: &'static str;
 	fn object_ptr(&self) -> *mut std::ffi::c_void;
-	fn create(object_ptr: *mut std::ffi::c_void) -> Self;
+    fn linked_context(&self) -> &crate::Context;
+	fn create(object_ptr: *mut std::ffi::c_void, context: crate::Context) -> Self;
 }
 
 macro_rules! ifunc {

@@ -1,6 +1,6 @@
 use crate::{CSteamID, EBeginAuthSessionResult, HAuthTicket, SteamNetworkingIdentity, interface::{Interface, ifunc}};
 
-pub struct ISteamUser(*mut std::ffi::c_void);
+pub struct ISteamUser(crate::Context, *mut std::ffi::c_void);
 
 /*
 CSteamID GetSteamID()
@@ -45,15 +45,37 @@ ifunc!(ISteamUser__CancelAuthTicket, 17, 17, std::ffi::c_void, (
 	hAuthTicket: u32
 ));
 
+/*
+SteamAPICall_t RequestEncryptedAppTicket( void *pDataToInclude, int cbDataToInclude );
+*/
+ifunc!(ISteamUser__RequestEncryptedAppTicket, 21, 21, u64, (
+	pDataToInclude: *const u8,
+	cbDataToInclude: std::ffi::c_int
+));
+
+#[allow(non_snake_case)]
+#[repr(C)]
+struct EncryptedAppTicketResponse_t {
+	result: u8
+}
+
+struct EncryptedAppTicketResponse {
+	result: crate::EBeginAuthSessionResult
+}
+
 impl Interface for ISteamUser {
 	const VERSION: &'static str = "SteamUser023\0";
 
 	fn object_ptr(&self) -> *mut std::ffi::c_void {
-		self.0
+		self.1
 	}
 
-	fn create(object_ptr: *mut std::ffi::c_void) -> Self {
-		ISteamUser(object_ptr)
+	fn create(object_ptr: *mut std::ffi::c_void, context: crate::Context) -> Self {
+		ISteamUser(context, object_ptr)
+	}
+
+	fn linked_context(&self) -> &crate::Context {
+		&self.0
 	}
 }
 
@@ -131,5 +153,15 @@ impl ISteamUser {
 			self,
 			ticket.v1_handle.unwrap()
 		);
+	}
+
+	pub fn request_encrypted_app_ticket(&self, data: &[u8]) {
+		let result = ISteamUser__RequestEncryptedAppTicket(
+			self,
+			data.as_ptr(),
+			data.len() as i32
+		);
+
+		self.linked_context()
 	}
 }
