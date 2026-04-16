@@ -26,22 +26,34 @@ pub(crate) struct HSteamPipe(i32);
 #[derive(Clone)]
 pub(crate) struct HSteamUser(i32);
 
-#[derive(Clone)]
-pub struct Context {
-	#[allow(unused)]
-	library: Arc<dl::Handle>,
-	c_fn_shutdown: unsafe extern "C" fn() -> std::ffi::c_void,
-	c_fn_create_interface: unsafe extern "C" fn(std::ffi::c_int, *const u8) -> *mut std::ffi::c_void,
-	user: HSteamUser,
-	pipe: HSteamPipe
+pub(crate) struct InnerContext {
+	library: dl::Handle,
+	c_fn_shutdown: unsafe extern "C" fn() -> std::ffi::c_void
 }
 
-impl Drop for Context {
+impl Drop for InnerContext {
 	fn drop(&mut self) {
 		unsafe {
 			(self.c_fn_shutdown)();
 		}
 	}
+}
+
+impl InnerContext {
+	pub(crate) fn new(lib: dl::Handle, fn_shutdown: unsafe extern "C" fn() -> std::ffi::c_void) -> Self {
+		Self {
+			library: lib,
+			c_fn_shutdown: fn_shutdown,
+		}
+	}
+}
+
+#[derive(Clone)]
+pub struct Context {
+	inner_context: Arc<InnerContext>,
+	c_fn_create_interface: unsafe extern "C" fn(std::ffi::c_int, *const u8) -> *mut std::ffi::c_void,
+	user: HSteamUser,
+	pipe: HSteamPipe
 }
 
 fn load_lib(path: std::path::PathBuf) -> Result<dl::Handle, InitError> {
@@ -142,10 +154,7 @@ pub fn init_gameserver(
 	println!("c_fn_create_interface: {:#x}", create_interface.addr());
 
 	Ok(Context {
-		library: module.into(),
-		c_fn_shutdown: unsafe {
-			std::mem::transmute(shutdown)
-		},
+		inner_context: InnerContext::new(module, unsafe { std::mem::transmute(shutdown) }).into(),
 		c_fn_create_interface: unsafe {
 			std::mem::transmute(create_interface)
 		},
@@ -219,10 +228,7 @@ pub fn init(
 	}
 
 	Ok(Context {
-		library: module.into(),
-		c_fn_shutdown: unsafe {
-			std::mem::transmute(shutdown)
-		},
+		inner_context: InnerContext::new(module, unsafe { std::mem::transmute(shutdown) }).into(),
 		c_fn_create_interface: unsafe {
 			std::mem::transmute(create_interface)
 		},

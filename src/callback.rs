@@ -1,9 +1,8 @@
 use std::future::Future;
 
 pub(crate) trait CallResponse {
-}
-
-pub(crate) trait SteamCallback {
+    const ID: u32;
+    fn parse(bytes: &[u8]) -> Self;
 }
 
 pub(crate) trait Handler<Args>: Clone + 'static {
@@ -137,6 +136,12 @@ impl crate::Context {
         M: CallResponse {
 
         let mut context = self.clone();
+
+        let (sender, receiver) = std::sync::mpsc::channel::<M>();
+
+        let dispatch = move |bytes: &[u8]| {
+            sender.send(M::parse(bytes))
+        };
 
         CallResult::new(receiver, context)
     }
